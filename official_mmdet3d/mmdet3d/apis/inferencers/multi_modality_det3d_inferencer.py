@@ -1,5 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import os.path as osp
+import os
 import warnings
 from typing import Dict, List, Optional, Sequence, Union
 
@@ -68,148 +69,115 @@ class MultiModalityDet3DInferencer(Base3DInferencer):
                         **kwargs) -> list:
         """Preprocess the inputs to a list.
 
-        Preprocess inputs to a list according to its type:
-
-        - list or tuple: return inputs
-        - dict: the value with key 'points' is
-            - Directory path: return all files in the directory
-            - other cases: return a list containing the string. The string
-              could be a path to file, a url or other types of string according
-              to the task.
-
-        Args:
-            inputs (Union[dict, list]): Inputs for the inferencer.
-
-        Returns:
-            list: List of input for the :meth:`preprocess`.
+        Supports both single‑view (cam_type != 'all') and multi‑view (cam_type == 'all').
         """
         if isinstance(inputs, dict):
-            assert 'infos' in inputs
+            assert 'infos' in inputs, 'Missing "infos" in input dict'
             infos = inputs.pop('infos')
+            info_list = mmengine.load(infos)['data_list']
 
-            if isinstance(inputs['img'], str):
-                img, pcd = inputs['img'], inputs['points']
-                backend = get_file_backend(img)
-                if hasattr(backend, 'isdir') and isdir(img) and isdir(pcd):
-                    # Backends like HttpsBackend do not implement `isdir`, so
-                    # only those backends that implement `isdir` could accept
-                    # the inputs as a directory
-                    img_filename_list = list_dir_or_file(
-                        img, list_dir=False, suffix=['.png', '.jpg'])
-                    pcd_filename_list = list_dir_or_file(
-                        pcd, list_dir=False, suffix='.bin')
-                    assert len(img_filename_list) == len(pcd_filename_list)
+            # ----- MULTI‑VIEW BRANCH -----
+            if cam_type == 'all':
+                img_root = inputs['img']
+                pcd_root = inputs['points']
+                samples = []
+                for data_info in info_list:
+                    images = {}
+                    for cam_name, cam_info in data_info['images'].items():
+                        full_path = os.path.join(img_root, cam_info['img_path'])
+                        images[cam_name] = {**cam_info, 'img_path': full_path}
+                    lidar_path = os.path.join(pcd_root, data_info['lidar_path'])
+                    sample = {
+                        'images': images,
+                        'lidar_points': dict(lidar_path=lidar_path),
+                        'timestamp': data_info.get('timestamp', 1),
+                        'box_type_3d': self.box_type_3d,
+                        'box_mode_3d': self.box_mode_3d,
+                        # Adiciona 'img' para compatibilidade com visualize
+                        'img': images,  # será usado pelo visualize
+                    }
+                    samples.append(sample)
+                return samples   # <-- SAÍDA ANTES DO SINGLE‑VIEW
 
-                    inputs = [{
-                        'img': join_path(img, img_filename),
-                        'points': join_path(pcd, pcd_filename)
-                    } for pcd_filename, img_filename in zip(
-                        pcd_filename_list, img_filename_list)]
-
+            # ----- SINGLE‑VIEW BRANCH -----
+            # Agora, se não for multi‑view, processa normalmente
+            # Se inputs for um único dicionário, converte para lista
             if not isinstance(inputs, (list, tuple)):
                 inputs = [inputs]
-
-            # get cam2img, lidar2cam and lidar2img from infos
-            info_list = mmengine.load(infos)['data_list']
-            assert len(info_list) == len(inputs)
-            for index, input in enumerate(inputs):
+            # Agora inputs é uma lista, e info_list também é uma lista
+            # Não fazemos assert len(info_list) == len(inputs) porque inputs é um dicionário
+            # Vamos processar cada item
+            for index, sample in enumerate(inputs):
                 data_info = info_list[index]
-                img_path = data_info['images'][cam_type]['img_path']
-                if isinstance(input['img'], str) and \
-                        osp.basename(img_path) != osp.basename(input['img']):
+                img_path_from_info = data_info['images'][cam_type]['img_path']
+                if isinstance(sample['img'], str) and \
+                        osp.basename(img_path_from_info) != osp.basename(sample['img']):
                     raise ValueError(
-                        f'the info file of {img_path} is not provided.')
+                        f'the info file of {img_path_from_info} is not provided.')
                 cam2img = np.asarray(
                     data_info['images'][cam_type]['cam2img'], dtype=np.float32)
                 lidar2cam = np.asarray(
-                    data_info['images'][cam_type]['lidar2cam'],
-                    dtype=np.float32)
+                    data_info['images'][cam_type]['lidar2cam'], dtype=np.float32)
                 if 'lidar2img' in data_info['images'][cam_type]:
                     lidar2img = np.asarray(
-                        data_info['images'][cam_type]['lidar2img'],
-                        dtype=np.float32)
+                        data_info['images'][cam_type]['lidar2img'], dtype=np.float32)
                 else:
                     lidar2img = cam2img @ lidar2cam
-                input['cam2img'] = cam2img
-                input['lidar2cam'] = lidar2cam
-                input['lidar2img'] = lidar2img
-        elif isinstance(inputs, (list, tuple)):
-            # get cam2img, lidar2cam and lidar2img from infos
-            for input in inputs:
-                assert 'infos' in input
-                infos = input.pop('infos')
-                info_list = mmengine.load(infos)['data_list']
-                assert len(info_list) == 1, 'Only support single sample' \
-                    'info in `.pkl`, when input is a list.'
-                data_info = info_list[0]
-                img_path = data_info['images'][cam_type]['img_path']
-                if isinstance(input['img'], str) and \
-                        osp.basename(img_path) != osp.basename(input['img']):
-                    raise ValueError(
-                        f'the info file of {img_path} is not provided.')
-                cam2img = np.asarray(
-                    data_info['images'][cam_type]['cam2img'], dtype=np.float32)
-                lidar2cam = np.asarray(
-                    data_info['images'][cam_type]['lidar2cam'],
-                    dtype=np.float32)
-                if 'lidar2img' in data_info['images'][cam_type]:
-                    lidar2img = np.asarray(
-                        data_info['images'][cam_type]['lidar2img'],
-                        dtype=np.float32)
-                else:
-                    lidar2img = cam2img @ lidar2cam
-                input['cam2img'] = cam2img
-                input['lidar2cam'] = lidar2cam
-                input['lidar2img'] = lidar2img
+                sample['cam2img'] = cam2img
+                sample['lidar2cam'] = lidar2cam
+                sample['lidar2img'] = lidar2img
+            return list(inputs)
 
-        return list(inputs)
+        elif isinstance(inputs, (list, tuple)):
+            # Para listas, processa cada item (não usado no demo)
+            raise NotImplementedError(
+                'List of inputs is not fully supported. Please pass a single dict.')
+        else:
+            raise TypeError(f'Unsupported input type: {type(inputs)}')
 
     def _init_pipeline(self, cfg: ConfigType) -> Compose:
         """Initialize the test pipeline."""
         pipeline_cfg = cfg.test_dataloader.dataset.pipeline
 
-        load_point_idx = self._get_transform_idx(pipeline_cfg,
-                                                 'LoadPointsFromFile')
-        load_mv_img_idx = self._get_transform_idx(
-            pipeline_cfg, 'LoadMultiViewImageFromFiles')
-        if load_mv_img_idx != -1:
-            warnings.warn(
-                'LoadMultiViewImageFromFiles is not supported yet in the '
-                'multi-modality inferencer. Please remove it')
-        # Now, we only support ``LoadImageFromFile`` as the image loader in the
-        # original piepline. `LoadMultiViewImageFromFiles` is not supported
-        # yet.
-        load_img_idx = self._get_transform_idx(pipeline_cfg,
-                                               'LoadImageFromFile')
+        load_point_idx = self._get_transform_idx(pipeline_cfg, 'LoadPointsFromFile')
+        load_img_idx = self._get_transform_idx(pipeline_cfg, 'LoadImageFromFile')
+        load_mv_img_idx = self._get_transform_idx(pipeline_cfg, 'BEVLoadMultiViewImageFromFiles')
 
-        if load_point_idx == -1 or load_img_idx == -1:
+        # Requer um loader de pontos e pelo menos um loader de imagens
+        if load_point_idx == -1 or (load_img_idx == -1 and load_mv_img_idx == -1):
             raise ValueError(
-                'Both LoadPointsFromFile and LoadImageFromFile must '
-                'be specified the pipeline, but LoadPointsFromFile is '
-                f'{load_point_idx == -1} and LoadImageFromFile is '
-                f'{load_img_idx}')
+                'Both LoadPointsFromFile and (LoadImageFromFile or BEVLoadMultiViewImageFromFiles) '
+                'must be specified in the pipeline, but LoadPointsFromFile is '
+                f'{load_point_idx == -1} and image loader is missing')
 
+        # Extrai parâmetros do loader de pontos para visualização
         load_cfg = pipeline_cfg[load_point_idx]
-        self.coord_type, self.load_dim = load_cfg['coord_type'], load_cfg[
-            'load_dim']
+        self.coord_type = load_cfg['coord_type']
+        self.load_dim = load_cfg['load_dim']
         self.use_dim = list(range(load_cfg['use_dim'])) if isinstance(
             load_cfg['use_dim'], int) else load_cfg['use_dim']
 
-        load_point_args = pipeline_cfg[load_point_idx]
-        load_point_args.pop('type')
-        load_img_args = pipeline_cfg[load_img_idx]
-        load_img_args.pop('type')
+        # Se o pipeline usa LoadImageFromFile, substitui ambos os loaders pelo loader customizado
+        # Se usa BEVLoadMultiViewImageFromFiles, mantém o pipeline intacto
+        if load_img_idx != -1:
+            load_point_args = pipeline_cfg[load_point_idx].copy()
+            load_point_args.pop('type')
+            load_img_args = pipeline_cfg[load_img_idx].copy()
+            load_img_args.pop('type')
 
-        load_idx = min(load_point_idx, load_img_idx)
-        pipeline_cfg.pop(max(load_point_idx, load_img_idx))
+            idx_to_remove = sorted([load_point_idx, load_img_idx], reverse=True)
+            for idx in idx_to_remove:
+                pipeline_cfg.pop(idx)
 
-        pipeline_cfg[load_idx] = dict(
-            type='MultiModalityDet3DInferencerLoader',
-            load_point_args=load_point_args,
-            load_img_args=load_img_args)
+            pipeline_cfg.insert(
+                min(load_point_idx, load_img_idx),
+                dict(type='MultiModalityDet3DInferencerLoader',
+                    load_point_args=load_point_args,
+                    load_img_args=load_img_args)
+            )
 
         return Compose(pipeline_cfg)
-
+    
     def visualize(self,
                   inputs: InputsType,
                   preds: PredType,

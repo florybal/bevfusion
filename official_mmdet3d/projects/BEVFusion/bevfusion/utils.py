@@ -31,22 +31,17 @@ class TransFusionBBoxCoder(BaseBBoxCoder):
         self.score_threshold = score_threshold
         self.code_size = code_size
 
-    def encode(self, dst_boxes):
-        targets = torch.zeros([dst_boxes.shape[0],
-                               self.code_size]).to(dst_boxes.device)
-        targets[:, 0] = (dst_boxes[:, 0] - self.pc_range[0]) / (
-            self.out_size_factor * self.voxel_size[0])
-        targets[:, 1] = (dst_boxes[:, 1] - self.pc_range[1]) / (
-            self.out_size_factor * self.voxel_size[1])
-        targets[:, 3] = dst_boxes[:, 3].log()
-        targets[:, 4] = dst_boxes[:, 4].log()
-        targets[:, 5] = dst_boxes[:, 5].log()
-        # bottom center to gravity center
-        targets[:, 2] = dst_boxes[:, 2] + dst_boxes[:, 5] * 0.5
-        targets[:, 6] = torch.sin(dst_boxes[:, 6])
-        targets[:, 7] = torch.cos(dst_boxes[:, 6])
-        if self.code_size == 10:
-            targets[:, 8:10] = dst_boxes[:, 7:]
+    def encode(self, gt_boxes):
+        """
+        gt_boxes: (N, 7) -> [x, y, z, w, l, h, yaw]
+        Returns: (N, 8) -> [x, y, z, w, l, h, sin(yaw), cos(yaw)]
+            """
+        N = gt_boxes.shape[0]
+        targets = gt_boxes.new_zeros((N, self.code_size))
+        targets[:, :6] = gt_boxes[:, :6]  # x, y, z, w, l, h
+        yaw = gt_boxes[:, 6]
+        targets[:, 6] = torch.sin(yaw)
+        targets[:, 7] = torch.cos(yaw)
         return targets
 
     def decode(self, heatmap, rot, dim, center, height, vel, filter=False):

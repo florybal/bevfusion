@@ -181,7 +181,7 @@ def main():
             if len(box) == 9:
                 x, y, z, l, w, h, yaw, vx, vy = box
             else:
-                x, y, z, l, w, h, yaw = box
+                x, y, z, l, w, h, yaw = box #verificar se é l, w, h ou w, l, h
 
             # ----- Projeção na câmera (FRONT) -----
             corners_3d = np.array([
@@ -207,6 +207,9 @@ def main():
                 ax_front.text(pts_2d[0, 0], pts_2d[0, 1] - 8,
                               f'{CLASSES[labels[i]]} {scores[i]:.2f}',
                               color='red', fontsize=6, bbox=dict(facecolor='white', alpha=0.7))
+            if np.all(pts_cam[:, 2] <= 0):
+                print(f"Warning: Box {i} is behind the camera.")
+                continue
 
             # ----- Desenho no BEV (top‑down) -----
             class_name = CLASSES[labels[i]]

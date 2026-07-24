@@ -236,10 +236,10 @@ class TransFusionHead(nn.Module):
                   padding:(-padding)] = local_max_inner
         # for Pedestrian & Traffic_cone in nuScenes
         if self.test_cfg['dataset'] == 'nuScenes':
-            local_max[:, 8, ] = F.max_pool2d(
-                heatmap[:, 8], kernel_size=1, stride=1, padding=0)
-            local_max[:, 9, ] = F.max_pool2d(
-                heatmap[:, 9], kernel_size=1, stride=1, padding=0)
+            local_max[:, -1, ] = F.max_pool2d(
+                heatmap[:, -1:], kernel_size=1, stride=1, padding=0)
+            local_max[:, -1, ] = F.max_pool2d(
+               heatmap[:, -1:], kernel_size=1, stride=1, padding=0)
         elif self.test_cfg[
                 'dataset'] == 'Waymo':  # for Pedestrian & Cyclist in Waymo
             local_max[:, 1, ] = F.max_pool2d(
@@ -372,8 +372,8 @@ class TransFusionHead(nn.Module):
             batch_dim = preds_dict[0]['dim'][..., -self.num_proposals:]
             batch_rot = preds_dict[0]['rot'][..., -self.num_proposals:]
             batch_vel = None
-            if 'vel' in preds_dict[0]:
-                batch_vel = preds_dict[0]['vel'][..., -self.num_proposals:]
+            #if 'vel' in preds_dict[0]:
+            #    batch_vel = preds_dict[0]['vel'][..., -self.num_proposals:]
 
             temp = self.bbox_coder.decode(
                 batch_score,
@@ -589,10 +589,12 @@ class TransFusionHead(nn.Module):
         height = copy.deepcopy(preds_dict['height'].detach())
         dim = copy.deepcopy(preds_dict['dim'].detach())
         rot = copy.deepcopy(preds_dict['rot'].detach())
-        if 'vel' in preds_dict.keys():
-            vel = copy.deepcopy(preds_dict['vel'].detach())
-        else:
-            vel = None
+        
+        vel = None
+        #if 'vel' in preds_dict.keys():
+        #    vel = copy.deepcopy(preds_dict['vel'].detach())
+        #else:
+        #    vel = None
 
         boxes_dict = self.bbox_coder.decode(
             score, rot, dim, center, height,
@@ -835,17 +837,18 @@ class TransFusionHead(nn.Module):
             preds = torch.cat(
                 [layer_center, layer_height, layer_dim, layer_rot],
                 dim=1).permute(0, 2, 1)  # [BS, num_proposals, code_size]
-            if 'vel' in preds_dict.keys():
-                layer_vel = preds_dict['vel'][..., idx_layer *
-                                              self.num_proposals:(idx_layer +
-                                                                  1) *
-                                              self.num_proposals, ]
-                preds = torch.cat([
-                    layer_center, layer_height, layer_dim, layer_rot, layer_vel
-                ],
-                                  dim=1).permute(
-                                      0, 2,
-                                      1)  # [BS, num_proposals, code_size]
+            #não há velocidade, então o código abaixo foi comentado
+            #if 'vel' in preds_dict.keys():
+            #    layer_vel = preds_dict['vel'][..., idx_layer *
+            #                                  self.num_proposals:(idx_layer +
+            #                                                      1) *
+            #                                  self.num_proposals, ]
+            #    preds = torch.cat([
+            #        layer_center, layer_height, layer_dim, layer_rot, layer_vel
+            #    ],
+            #                      dim=1).permute(
+            #                          0, 2,
+            #                          1)  # [BS, num_proposals, code_size]
             code_weights = self.train_cfg.get('code_weights', None)
             layer_bbox_weights = bbox_weights[:, idx_layer *
                                               self.num_proposals:(idx_layer +

@@ -6,7 +6,7 @@ from collections import defaultdict
 PKL_PATH = "/mnt/53cbd82b-cb4d-4d12-af28-db5560fa258d/datasets/BEVLOG/finetunning/bevfusion_dataset.pkl"
 FRAME_LIST_PATH = "/workspace/official_mmdet3d/data/BEVLOG/finetunning/record_2025-10-15_09-54-30/annotations/pointclouds/frame_list.txt"
 XML_PATH = "/workspace/official_mmdet3d/data/BEVLOG/finetunning/record_2025-10-15_09-54-30/annotations/pointclouds/tracklet_labels.xml"
-OUTPUT_PKL = PKL_PATH
+OUTPUT_PKL = "/mnt/53cbd82b-cb4d-4d12-af28-db5560fa258d/datasets/BEVLOG/finetunning/bevfusion_dataset.pkl"   
 
 CLASS_MAPPING = {
     'obstrucao': 0,
@@ -111,14 +111,14 @@ def main():
             bboxes = np.array([ann[0] for ann in ann_list], dtype=np.float32)
             labels = np.array([ann[1] for ann in ann_list], dtype=np.int64)
             sample['annos'] = {
-                'bboxes_3d': bboxes,
-                'labels_3d': labels,
+                'gt_bboxes_3d': bboxes,
+                'gt_labels_3d': labels,
             }
             updated += 1
         else:
             sample['annos'] = {
-                'bboxes_3d': np.zeros((0, 7), dtype=np.float32),
-                'labels_3d': np.zeros((0,), dtype=np.int64),
+                'gt_bboxes_3d': np.zeros((0, 7), dtype=np.float32),
+                'gt_labels_3d': np.zeros((0,), dtype=np.int64),
             }
     
     print(f"Samples atualizados com anotações: {updated}")

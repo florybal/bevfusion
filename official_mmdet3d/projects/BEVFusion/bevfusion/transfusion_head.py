@@ -89,6 +89,9 @@ class TransFusionHead(nn.Module):
         self.use_sigmoid_cls = loss_cls.get('use_sigmoid', False)
         if not self.use_sigmoid_cls:
             self.num_classes += 1
+        print("loss_cls =", loss_cls)
+        print("use_sigmoid_cls =", self.use_sigmoid_cls)
+        print("num_classes =", self.num_classes)
         self.loss_cls = MODELS.build(loss_cls)
         self.loss_bbox = MODELS.build(loss_bbox)
         self.loss_heatmap = MODELS.build(loss_heatmap)
@@ -317,6 +320,26 @@ class TransFusionHead(nn.Module):
                     [ret_dict[key] for ret_dict in ret_dicts], dim=-1)
             else:
                 new_res[key] = ret_dicts[0][key]
+
+        print(self.auxiliary)
+        print(self.num_decoder_layers)
+        print(len(ret_dicts))
+
+        print("=== forward_single ===")
+        print(type(new_res))
+        print(new_res.keys())
+        print("=== END forward_single ===")
+        
+        print(type(ret_dicts))
+
+        if isinstance(ret_dicts, list):
+            print("len =", len(ret_dicts))
+            for i, r in enumerate(ret_dicts):
+                print(i, type(r))
+
+        elif isinstance(ret_dicts, dict):
+            print("RETORNANDO APENAS UM DICT")
+        
         return [new_res]
 
     def forward(self, feats, metas):
@@ -329,10 +352,34 @@ class TransFusionHead(nn.Module):
             tuple(list[dict]): Output results. first index by level, second
             index by layer
         """
+        print("=== forward ===")
+        print(type(feats))
+
+        if isinstance(feats, tuple):
+            print("tuple len", len(feats))
+            for i, f in enumerate(feats):
+                print(i, type(f), f.shape)
+
+        elif isinstance(feats, list):
+            print("list len", len(feats))
+            for i, f in enumerate(feats):
+                print(i, type(f), f.shape)
+
         if isinstance(feats, torch.Tensor):
             feats = [feats]
         res = multi_apply(self.forward_single, feats, [metas])
+        print(type(res))
+        print(type(res[0]))
+        print(len(res[0]))
+        print(type(res[0][0]))
         assert len(res) == 1, 'only support one level features.'
+
+        print("=== forward return ===")
+        print(type(res))
+        print(len(res))
+
+        for i, r in enumerate(res):
+            print(i, type(r))
         return res
 
     def predict(self, batch_feats, batch_input_metas):
@@ -527,12 +574,7 @@ class TransFusionHead(nn.Module):
         for batch_idx in range(len(batch_gt_instances_3d)):
             pred_dict = {}
             for key in preds_dict[0].keys():
-                preds = []
-                for i in range(self.num_decoder_layers):
-                    pred_one_layer = preds_dict[i][key][batch_idx:batch_idx +
-                                                        1]
-                    preds.append(pred_one_layer)
-                pred_dict[key] = torch.cat(preds)
+                pred_dict[key] = preds_dict[0][key][batch_idx:batch_idx + 1]
             list_of_pred_dict.append(pred_dict)
 
         assert len(batch_gt_instances_3d) == len(list_of_pred_dict)
@@ -560,7 +602,6 @@ class TransFusionHead(nn.Module):
             matched_ious,
             heatmap,
         )
-
     def get_targets_single(self, gt_instances_3d, preds_dict, batch_idx):
         """Generate training targets for a single sample.
         Args:
@@ -760,6 +801,13 @@ class TransFusionHead(nn.Module):
             batch_input_metas.append(data_sample.metainfo)
             batch_gt_instances_3d.append(data_sample.gt_instances_3d)
         preds_dicts = self(batch_feats, batch_input_metas)
+        print(type(preds_dicts))
+        print(len(preds_dicts))
+
+        for i, p in enumerate(preds_dicts):
+            print("layer", i, type(p))
+            if isinstance(p, dict):
+                print("keys:", p.keys())
         loss = self.loss_by_feat(preds_dicts, batch_gt_instances_3d)
 
         return loss
@@ -767,6 +815,12 @@ class TransFusionHead(nn.Module):
     def loss_by_feat(self, preds_dicts: Tuple[List[dict]],
                      batch_gt_instances_3d: List[InstanceData], *args,
                      **kwargs):
+
+        print("ANTES DO GET_TARGETS")
+        print(type(preds_dicts))
+        print(type(preds_dicts[0]))
+        print(id(preds_dicts[0]))
+
         (
             labels,
             label_weights,
@@ -777,11 +831,35 @@ class TransFusionHead(nn.Module):
             matched_ious,
             heatmap,
         ) = self.get_targets(batch_gt_instances_3d, preds_dicts[0])
+
+        preds_dict = preds_dicts[0][0]   # <-- MOVIDO PRA CÁ, antes dos prints de debug
+
+        print("========== loss_by_feat ==========")
+        print(type(preds_dicts))
+        print("len =", len(preds_dicts))
+
+        for i, x in enumerate(preds_dicts):
+            print("preds_dicts[{}]".format(i), type(x))
+
+            if isinstance(x, list):
+                print("   len =", len(x))
+                for j, y in enumerate(x):
+                    print("      [{}]".format(j), type(y))
+
+        for i, x in enumerate(preds_dicts):
+            print(i, type(x))
+            if isinstance(x, list):
+                print(" list len =", len(x))
+                print(" first =", type(x[0]))
+
+        print("preds_dict len:", len(preds_dict))   # agora funciona, preds_dict já existe
+        print(preds_dict)
+        
         if hasattr(self, 'on_the_image_mask'):
             label_weights = label_weights * self.on_the_image_mask
             bbox_weights = bbox_weights * self.on_the_image_mask[:, :, None]
             num_pos = bbox_weights.max(-1).values.sum()
-        preds_dict = preds_dicts[0][0]
+
         loss_dict = dict()
 
         # compute heatmap loss

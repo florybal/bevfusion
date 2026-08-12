@@ -16,7 +16,7 @@ import cv2
 
 # ===== CONFIGURAÇÕES =====
 CONFIG_FILE = "projects/BEVFusion/configs/bevfusion_plastipak.py"
-CHECKPOINT = "/workspace/official_mmdet3d/work_dirs/bevfusion_plastipak/epoch_6.pth"
+CHECKPOINT = "/workspace/results/training/plastipak/epoch_5.pth"
 DATA_ROOT = "/workspace/official_mmdet3d/data/BEVLOG/finetunning/"
 PKL_FILE = "/mnt/53cbd82b-cb4d-4d12-af28-db5560fa258d/datasets/BEVLOG/finetunning/bevfusion_dataset_train.pkl"
 OUTPUT_IMAGE = "./prediction_visualization.png"
@@ -56,8 +56,8 @@ for cam_name in cam_names:
     img_paths.append(img_path)
     # Ler imagem
     img = plt.imread(img_path)
-    # Redimensionar para 256x704
-    img_resized = cv2.resize(img, (704, 256), interpolation=cv2.INTER_LINEAR)
+    # Redimensionar para 1280x720
+    img_resized = cv2.resize(img, (720, 1280), interpolation=cv2.INTER_LINEAR)
     # Converter para tensor (CHW)
     img_tensor = torch.from_numpy(img_resized).float().permute(2, 0, 1)
     # Normalizar (ImageNet)

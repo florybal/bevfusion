@@ -34,7 +34,32 @@ calib_ts = np.array(
     dtype=np.float64
 )
 
-MAX_TIME_DIFF = 0.15
+MAX_TIME_DIFF = 1.2
+
+bev_files = []
+for filename in os.listdir(BEV_FOLDER):
+    if filename.endswith("_bev_label.npy"):
+        try:
+            bev_ts = float(filename.replace("_bev_label.npy", ""))
+        except ValueError:
+            continue
+        bev_files.append((bev_ts, filename))
+
+bev_files.sort()
+
+def get_bev_path(timestamp):
+    if not bev_files:
+        return None
+
+    closest_ts, closest_filename = min(
+        bev_files,
+        key=lambda item: abs(item[0] - timestamp)
+    )
+
+    if abs(closest_ts - timestamp) > MAX_TIME_DIFF:
+        return None
+
+    return os.path.join(BEV_FOLDER, closest_filename)
 
 dataset = []
 
@@ -73,8 +98,8 @@ for i,item in enumerate(manifest):
 
         for a in arquivos[:5]:
             print("BEV:", os.path.basename(a))
-    bev_path = os.path.join(BEV_FOLDER,f"{timestamp:.6f}_bev_label.npy")
-    if not os.path.exists(bev_path):
+    bev_path = get_bev_path(timestamp)
+    if bev_path is None:
         print("SEM BEV:", bev_path)
 
         missing_bev += 1

@@ -1,3 +1,7 @@
+# ==============================================
+# BEVFusion - Dataset Plastipak para Detecção 3D
+# ==============================================
+
 import os.path as osp
 
 import numpy as np

@@ -1,3 +1,7 @@
+# ============================================================
+# BEVFusion - antigo Inference Script and Visualization (Front + BEV) 
+# ============================================================
+
 import os, argparse, numpy as np, torch
 np.Inf = np.inf
 import matplotlib.pyplot as plt
@@ -7,6 +11,7 @@ from mmengine import Config
 from mmdet3d.apis import init_model
 from mmdet3d.structures import LiDARInstance3DBoxes, Det3DDataSample
 from nuscenes.nuscenes import NuScenes
+
 
 CONFIG_FILE = "projects/BEVFusion/configs/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py"
 CHECKPOINT = "/workspace/results/training/epoch_6.pth"

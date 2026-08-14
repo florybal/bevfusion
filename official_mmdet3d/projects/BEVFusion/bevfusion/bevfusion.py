@@ -280,27 +280,6 @@ class BEVFusion(Base3DDetector):
             
         x = self.pts_backbone(x)
         x = self.pts_neck(x)
-        print("coloquei antes de: x = self.pts_backbone(x) x = self.pts_neck(x)")
-
-        print("=== extract_feat ===")
-        print(type(x))
-
-        if isinstance(x, tuple):
-            print("tuple len:", len(x))
-            for i, xx in enumerate(x):
-                print(i, type(xx))
-                if isinstance(xx, torch.Tensor):
-                    print(xx.shape)
-
-        elif isinstance(x, list):
-            print("list len:", len(x))
-            for i, xx in enumerate(x):
-                print(i, type(xx))
-                if isinstance(xx, torch.Tensor):
-                    print(xx.shape)
-
-        else:
-            print(x.shape if hasattr(x, "shape") else x)
 
         return x
 
@@ -311,10 +290,7 @@ class BEVFusion(Base3DDetector):
         feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
 
         losses = dict()
-        if self.with_bbox_head:
-            print("FEATURE SHAPES:")
-            for i, f in enumerate(feats):
-                print(i, f.shape)    
+        if self.with_bbox_head: 
             bbox_loss = self.bbox_head.loss(feats, batch_data_samples)
         losses.update(bbox_loss)
 

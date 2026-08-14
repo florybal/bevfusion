@@ -24,22 +24,22 @@ mkdir -p $DATASET/bin
 echo "======================================="
 echo "1. Convertendo PCD -> BIN"
 echo "======================================="
-python tools/pcd2bin.py
+python tools/build_dataset/pcd2bin.py
 
 echo "======================================="
 echo "2. Adicionando anotações XML"
 echo "======================================="
-python tools/add_annotations_from_xml.py
+python tools/build_dataset/add_annotations_from_xml.py
 
 echo "======================================="
 echo "3. Adicionando máscaras BEV"
 echo "======================================="
-python tools/process_json.py
+python tools/build_dataset/process_json.py
 
 echo "======================================="
 echo "4. Gerando train/val/test"
 echo "======================================="
-python tools/split_dataset.py
+python tools/build_dataset/split_dataset.py
 
 echo "======================================="
 echo "Pipeline finalizado!"

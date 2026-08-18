@@ -65,10 +65,11 @@ RUN sed -i \
 # ------------------------------------------------------------------
 # Clone MMDetection3D v1.4.0
 # ------------------------------------------------------------------
-#RUN git clone \
-#    --branch v1.4.0 \
-#    https://github.com/open-mmlab/mmdetection3d.git \
-#    /workspace/official_mmdet3d
+#
+RUN git clone \
+    --branch v1.4.0 \
+    https://github.com/open-mmlab/mmdetection3d.git \
+    /workspace/official_mmdet3d
 
 WORKDIR /workspace/official_mmdet3d
 

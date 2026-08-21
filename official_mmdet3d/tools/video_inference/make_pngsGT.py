@@ -21,7 +21,7 @@ from mmdet3d.apis import MultiModalityDet3DInferencer
 
 # ===== CONFIGURAÇÕES =====
 CONFIG_FILE = "projects/BEVFusion/configs/bevfusion_plastipak.py"
-CHECKPOINT = "/workspace/results/training/plastipak/50-epoch/epoch_50.pth"  
+CHECKPOINT = "/workspace/results/training/plastipak/30epoch/epoch_20.pth"  
 DATA_ROOT = "/workspace/official_mmdet3d/data/BEVLOG/finetunning/"
 PKL_FILE = "/mnt/53cbd82b-cb4d-4d12-af28-db5560fa258d/datasets/BEVLOG/finetunning/bevfusion_dataset_train.pkl"
 OUTPUT_DIR = "./output/qualitative_vis/bevfusion/frames"
@@ -189,12 +189,6 @@ def main():
             boxes = np.zeros((0,7), np.float32)
             scores = np.zeros(0, np.float32)
             labels = np.zeros(0, np.int32)
-
-        preds = result["predictions"][0]
-        pred_inst = preds.pred_instances_3d
-        boxes = pred_inst.bboxes_3d.tensor.cpu().numpy()
-        scores = pred_inst.scores_3d.cpu().numpy()
-        labels = pred_inst.labels_3d.cpu().numpy().astype(int)
 
         # GT
         gt_boxes = np.zeros((0,7), np.float32)

@@ -1,209 +1,102 @@
-# =================================================================
-# BEVFusion - Novo Inference Script and Visualization (Front + BEV) 
-# =================================================================
-
 import os
 import numpy as np
 
-# Compatibilidade NumPy 2.x com versões antigas do Matplotlib
-np.Inf = np.inf
-np.NaN = np.nan
-np.Infinity = np.inf
+# --- Monkey Patch ---
+np.Inf = np.inf 
+# ---------------------------
 
+import torch
 import matplotlib.pyplot as plt
 import cv2
 import matplotlib.patches as patches
 from matplotlib.patches import Patch
-import mmengine
 
-from mmdet3d.structures import (
-    LiDARInstance3DBoxes,
-    CameraInstance3DBoxes,
-    DepthInstance3DBoxes,
-)
-
-from mmdet3d.apis import MultiModalityDet3DInferencer
+from mmengine.config import Config
+from mmengine.registry import init_default_scope
+from mmengine.runner import load_checkpoint
+from mmengine.dataset import pseudo_collate
+from mmdet3d.registry import MODELS, DATASETS
+from mmdet3d.utils import register_all_modules
 
 # ===== CONFIGURAÇÕES =====
 CONFIG_FILE = "projects/BEVFusion/configs/bevfusion_plastipak.py"
-CHECKPOINT = "/workspace/results/training/plastipak/epoch_20.pth"
+CHECKPOINT = "/workspace/results/training/plastipak/30epoch/epoch_20.pth"  
 DATA_ROOT = "/workspace/official_mmdet3d/data/BEVLOG/finetunning/"
-PKL_FILE = "/mnt/53cbd82b-cb4d-4d12-af28-db5560fa258d/datasets/BEVLOG/finetunning/bevfusion_dataset_train.pkl"
 OUTPUT_IMAGE = "./prediction_visualization_final.png"
-SCORE_THR = 0.001
+SCORE_THR = 0.01
 SAMPLE_INDEX = 0
 
 CLASSES = (
-    "obstrucao",
-    "empilhadeira",
-    "carga",
-    "maquina",
-    "humano",
-    "navegavel",
-    "estrutura",
-    "portapalete",
+    "obstrucao", "empilhadeira", "carga", "maquina",
+    "humano", "navegavel", "estrutura", "portapalete"
 )
 COLOR_MAP = {
-    "obstrucao": "red",
-    "empilhadeira": "orange",
-    "carga": "magenta",
-    "maquina": "blue",
-    "humano": "cyan",
-    "navegavel": "green",
-    "estrutura": "yellow",
-    "portapalete": "brown",
+    "obstrucao": "red", "empilhadeira": "orange", "carga": "magenta",
+    "maquina": "blue", "humano": "cyan", "navegavel": "green",
+    "estrutura": "yellow", "portapalete": "brown"
 }
 
-# 1. Carregar sample do .pkl
-data_list = mmengine.load(PKL_FILE)
-sample = data_list[SAMPLE_INDEX]
+register_all_modules(init_default_scope='mmdet3d')
 
-# Apenas garantimos que os caminhos são absolutos para a pipeline conseguir ler do disco
-if not os.path.isabs(sample["lidar_path"]):
-    sample["lidar_path"] = os.path.join(DATA_ROOT, sample["lidar_path"])
+# 1. Carregar Configuração
+cfg = Config.fromfile(CONFIG_FILE)
+cfg.data_root = DATA_ROOT
 
-for cam_key in list(sample["images"].keys()):
-    if not os.path.isabs(sample["images"][cam_key]["img_path"]):
-        sample["images"][cam_key]["img_path"] = os.path.join(
-            DATA_ROOT, sample["images"][cam_key]["img_path"]
-        )
+# Garantir que a chave 'img' esteja no Pack3DDetInputs do test_pipeline
+for transform in cfg.test_pipeline:
+    if transform.get('type') == 'Pack3DDetInputs':
+        if 'keys' in transform and 'img' not in transform['keys']:
+            transform['keys'] = list(transform['keys']) + ['img']
 
-# Substitui a string pela classe chamável (callable) esperada pelo modelo
-if "box_type_3d" in sample and isinstance(sample["box_type_3d"], str):
-    if "Camera" in sample["box_type_3d"]:
-        sample["box_type_3d"] = CameraInstance3DBoxes
-    elif "Depth" in sample["box_type_3d"]:
-        sample["box_type_3d"] = DepthInstance3DBoxes
-    else:
-        sample["box_type_3d"] = LiDARInstance3DBoxes
-elif "box_type_3d" not in sample:
-    # Caso a chave não tenha sido salva no pkl, força o padrão do BEVFusion
-    sample["box_type_3d"] = LiDARInstance3DBoxes
+# Reconstruir pipeline no dataset
+dataset_cfg = cfg.test_dataloader.dataset.copy()
+dataset_cfg['pipeline'] = cfg.test_pipeline
+dataset = DATASETS.build(dataset_cfg)
 
-# 2. Criar inferenciador
-inferencer = MultiModalityDet3DInferencer(
-    model=CONFIG_FILE,
-    weights=CHECKPOINT,
-    device="cuda:0"
-)
+# 2. Carregar Amostra e Criar Batch
+sample = dataset[SAMPLE_INDEX]
+batch = pseudo_collate([sample])
 
-# ============================================================
-# BYPASS 1
-# Não deixar o inferencer tentar interpretar nosso sample
-# ============================================================
+# 3. Construir e Carregar Modelo
+model = MODELS.build(cfg.model)
+load_checkpoint(model, CHECKPOINT, map_location='cpu')
+model.cuda()
+model.eval()
 
-inferencer._inputs_to_list = lambda inputs, **kwargs: inputs
+# 4. Inferência Oficial (Passando pelo DataPreprocessor)
+with torch.no_grad():
+    # O test_step é vital! Ele chama o model.data_preprocessor internamente,
+    # move para GPU, aplica padding, agrupa tensores e converte 'img' para 'imgs'.
+    predictions = model.test_step(batch)
+    preds = predictions[0]
 
-# ============================================================
-# BYPASS 2
-# Manter o Det3DDataSample produzido pelo modelo
-# mas devolver no formato esperado pelo Base3DInferencer
-# ============================================================
-
-def custom_postprocess(preds, *args, **kwargs):
-
-    print("\n========== POSTPROCESS ==========")
-    print("tipo preds:", type(preds))
-
-    if isinstance(preds, list):
-        print("len preds:", len(preds))
-
-        if len(preds) > 0:
-            print("tipo preds[0]:", type(preds[0]))
-
-    print("=================================\n")
-
-    return {
-        "predictions": preds,
-        "visualization": None,
-    }
-
-inferencer.postprocess = custom_postprocess
-
-# 3. Fazer inferência
-result = inferencer(
-    [sample],
-    return_vis=False,  # <--- Desliga o visualizador interno problemático
-    show=False,
-    draw_pred=False,  # <--- Diz para a biblioteca não tentar desenhar as caixas
-    pred_score_thr=SCORE_THR,
-)
-
-print("\n========== RESULTADO ==========")
-print("tipo result:", type(result))
-print("keys:", result.keys())
-
-predictions = result["predictions"]
-
-print("tipo predictions:", type(predictions))
-print("len predictions:", len(predictions))
-
-prediction = predictions[0]
-
-print("tipo prediction:", type(prediction))
-print("metainfo:", prediction.metainfo)
-
-print(
-    "tem pred_instances_3d:",
-    hasattr(prediction, "pred_instances_3d")
-)
-
-pred_instances = prediction.pred_instances_3d
-
-print("Número de caixas:", len(pred_instances))
-
-print(
-    "scores:",
-    pred_instances.scores_3d.detach().cpu().numpy()
-)
-
-print(
-    "labels:",
-    pred_instances.labels_3d.detach().cpu().numpy()
-)
-
-print(
-    "boxes:",
-    pred_instances.bboxes_3d.tensor.detach().cpu().numpy()
-)
-
-print("===============================\n")
-
-# 4. Extrair predições (O resto do seu código segue normalmente)
-# Como desliguei o return_vis, o resultado virá um pouco diferente:
-# 'result' terá apenas um dicionário contendo as 'predictions'.
-predictions = result["predictions"][0]
-pred_instances = predictions.pred_instances_3d
-
-print("BOX TYPE:", type(pred_instances.bboxes_3d))
-print("BOX SHAPE:", pred_instances.bboxes_3d.tensor.shape)
-print("LABELS:", pred_instances.labels_3d)
-print("SCORES:", pred_instances.scores_3d)
+# 5. Extrair Predições
+pred_instances = preds.pred_instances_3d
+boxes = pred_instances.bboxes_3d.tensor.cpu().numpy()
+labels = pred_instances.labels_3d.cpu().numpy()
+scores = pred_instances.scores_3d.cpu().numpy()
 
 print("\n" + "=" * 70)
 print("DIAGNÓSTICO DAS PREDIÇÕES")
 print("=" * 70)
-
-scores = pred_instances.scores_3d.detach().cpu().numpy()
-labels = pred_instances.labels_3d.detach().cpu().numpy()
-boxes = pred_instances.bboxes_3d.tensor.detach().cpu().numpy()
-
+ 
 print("Número de predições:", len(scores))
+print(model.bbox_head.test_cfg) 
 
 if len(scores) > 0:
-
+ 
     print("\nScores:")
     print("  min :", scores.min())
     print("  max :", scores.max())
     print("  mean:", scores.mean())
-
+ 
     print("\nQuantidade por threshold:")
     for thr in [0.001, 0.01, 0.05, 0.1, 0.2, 0.3, 0.5]:
         print(
             f"  score >= {thr:.3f}: "
             f"{np.sum(scores >= thr)}"
         )
-
+ 
     print("\nDistribuição das classes:")
     for c in range(len(CLASSES)):
         n = np.sum(labels == c)
@@ -212,7 +105,7 @@ if len(scores) > 0:
                 f"  {c}: {CLASSES[c]:15s} "
                 f"{n:4d} preds"
             )
-
+ 
     print("\nPrimeiras caixas:")
     for i in range(min(20, len(boxes))):
         print(
@@ -221,70 +114,67 @@ if len(scores) > 0:
             f"score={scores[i]:.4f} "
             f"box={boxes[i]}"
         )
-
+ 
     print("\nEstatísticas XYZ:")
-
+ 
     print("X:")
     print("  min =", boxes[:, 0].min())
     print("  max =", boxes[:, 0].max())
-
+ 
     print("Y:")
     print("  min =", boxes[:, 1].min())
     print("  max =", boxes[:, 1].max())
-
+ 
     print("Z:")
     print("  min =", boxes[:, 2].min())
     print("  max =", boxes[:, 2].max())
-
+ 
     print("\nDimensões:")
-
+ 
     print("W:")
     print("  min =", boxes[:, 3].min())
     print("  max =", boxes[:, 3].max())
-
+ 
     print("L:")
     print("  min =", boxes[:, 4].min())
     print("  max =", boxes[:, 4].max())
-
+ 
     print("H:")
     print("  min =", boxes[:, 5].min())
     print("  max =", boxes[:, 5].max())
-
+ 
 else:
     print("!!! MODELO NÃO PRODUZIU NENHUMA PREDIÇÃO !!!")
+ 
+print("=" * 70 + "\n")
 
-print("=" * 70)
+# 6. Imagem para Exibição
+inputs = batch['inputs']
+data_samples = batch['data_samples']
 
-boxes = pred_instances.bboxes_3d.tensor.cpu().numpy()
-labels = pred_instances.labels_3d.cpu().numpy()
-scores = pred_instances.scores_3d.cpu().numpy()
+img_path = None
+if hasattr(data_samples[0], 'img_path'):
+    img_path = data_samples[0].img_path
+    if isinstance(img_path, list):
+        img_path = img_path[0]
 
-# 5. Visualizar
-first_cam = list(sample["images"].keys())[0]
+if img_path and os.path.exists(img_path):
+    front_img = cv2.imread(img_path)
+elif 'img' in inputs and len(inputs['img']) > 0:
+    raw_img = inputs['img'][0]
+    if raw_img.ndim == 4:  # (N_views, C, H, W)
+        raw_img = raw_img[0]
+    raw_img = raw_img.cpu().numpy().transpose(1, 2, 0)
+    if raw_img.max() <= 1.0:
+        raw_img = (raw_img * 255).astype(np.uint8)
+    front_img = cv2.cvtColor(raw_img.astype(np.uint8), cv2.COLOR_RGB2BGR)
+else:
+    front_img = np.zeros((720, 1280, 3), dtype=np.uint8)
 
-img_path = sample["images"][first_cam]["img_path"]
-
-print("Imagem usada:", img_path)
-
-front_img = cv2.imread(img_path)
-
-if front_img is None:
-    raise RuntimeError(
-        f"Não foi possível carregar a imagem:\n{img_path}"
-    )
-
-front_img = cv2.cvtColor(front_img, cv2.COLOR_BGR2RGB)
-
-fig, (ax_front, ax_bev) = plt.subplots(
-    1, 2,
-    figsize=(24, 10)
-)
-
-ax_front.imshow(front_img)
-ax_front.set_title(
-    f"Camera ({first_cam})",
-    fontsize=14
-)
+# 7. Renderização do Gráfico
+fig, (ax_front, ax_bev) = plt.subplots(1, 2, figsize=(24, 10))
+ax_front.imshow(cv2.cvtColor(front_img, cv2.COLOR_BGR2RGB))
+ax_front.set_title("Camera (front)", fontsize=14)
 ax_front.axis("off")
 
 BEV_X_RANGE = [-54, 54]
@@ -335,5 +225,4 @@ ax_bev.legend(
 
 plt.subplots_adjust(left=0.05, right=0.75, top=0.95, bottom=0.08)
 plt.savefig(OUTPUT_IMAGE, dpi=300, bbox_inches="tight", pad_inches=0.2)
-print(f"Visualização salva em {OUTPUT_IMAGE}")
-
+print(f"Visualização salva com sucesso em: {OUTPUT_IMAGE}")

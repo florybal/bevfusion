@@ -222,7 +222,7 @@ model = dict(
         ),
         loss_bbox=dict(type="mmdet.L1Loss", loss_weight=0.25, reduction="mean"),
         train_cfg=dict(
-            dataset="plastikpak",
+            dataset="plastipak", #tava plastikpak
             grid_size=[1440, 1440, 41],
             out_size_factor=8,
             voxel_size=[0.075, 0.075],
@@ -242,7 +242,7 @@ model = dict(
             ),
         ),
         test_cfg=dict(
-            dataset="plastikpak",
+            dataset="344",
             grid_size=[1440, 1440, 41],
             out_size_factor=8,
             pc_range=[-54.0, -54.0],
@@ -285,7 +285,7 @@ train_pipeline = [
     dict(type="BEVFusionRandomFlip3D"),
     dict(type="PointsRangeFilter", point_cloud_range=point_cloud_range),
     dict(type="ObjectRangeFilter", point_cloud_range=point_cloud_range),
-    # dict(type='ObjectNameFilter', classes=classes), #pode dar erro se não tiver as classes ou o metainfo
+    dict(type='ObjectNameFilter', classes=classes), #pode dar erro se não tiver as classes ou o metainfo
     dict(
         type="GridMask",
         use_h=True,
@@ -448,8 +448,8 @@ param_scheduler = [
     dict(
         type='CosineAnnealingLR',
         begin=0,
-        T_max=20,
-        end=20,
+        T_max=30,
+        end=30,
         by_epoch=True,
         eta_min_ratio=1e-4,
         convert_to_iter_based=True),
@@ -467,16 +467,16 @@ param_scheduler = [
         type='CosineAnnealingMomentum',
         eta_min=1,
         begin=2.4,
-        end=20,
+        end=30,
         by_epoch=True,
         convert_to_iter_based=True)
 ]
 
 # ===== RUNTIME =====
-train_cfg = dict(by_epoch=True, max_epochs=20, val_interval=5)
+train_cfg = dict(by_epoch=True, max_epochs=30, val_interval=5)
 
-val_cfg = dict(type='ValLoop')
-test_cfg = dict(type='TestLoop')
+val_cfg = dict()
+test_cfg = dict()
 
 default_hooks = dict(
     logger=dict(type="LoggerHook", interval=50),
@@ -485,7 +485,7 @@ default_hooks = dict(
 
 log_processor = dict(window_size=50)
 
-auto_scale_lr = dict(enable=False, base_batch_size=8)
+auto_scale_lr = dict(enable=True, base_batch_size=8)
 
 vis_backends = [dict(type="LocalVisBackend")]
 

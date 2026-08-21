@@ -118,9 +118,7 @@ class PlastipakDataset(Det3DDataset):
             cam_item.setdefault('lidar2cam', lidar2cam.tolist())
 
     def full_init(self):
-        print("=== BEFORE FULL INIT ===")
         super().full_init()
-        print("=== AFTER FULL INIT ===")
         print("data_list:", len(self.data_list))
 
     def load_data_list(self):
@@ -148,12 +146,6 @@ class PlastipakDataset(Det3DDataset):
                         'bbox_label': int(label)
                     })
                 item['instances'] = instances
-
-        print("Loaded samples:", len(data_list))
-        if data_list:
-            print("First sample keys:", data_list[0].keys())
-            print("Instances:", len(data_list[0].get('instances', [])))
-        print("Total instances across all samples:", sum(len(item.get('instances', [])) for item in data_list))
 
         return data_list
     def get_data_info(self, idx):
@@ -196,20 +188,13 @@ class PlastipakDataset(Det3DDataset):
         bboxes_tensor = torch.tensor(bboxes, dtype=torch.float32)
         gt_bboxes_3d = LiDARInstance3DBoxes(bboxes_tensor, box_dim=7, with_yaw=True)
 
-        print(f"Sample {idx}: labels={labels.tolist() if len(labels) else []}, names={names}")  # <-- ADICIONE
-
         return {
             'gt_bboxes_3d': gt_bboxes_3d,
             'gt_labels_3d': torch.tensor(labels, dtype=torch.long),
             'gt_names': names 
         }
     def filter_data(self):
-        print("Before filter:", len(self.data_list))
-
         data_list = super().filter_data()
-
-        print("After filter:", len(data_list))
-
         return data_list
     
     def prepare_data(self, idx):
@@ -224,6 +209,4 @@ class PlastipakDataset(Det3DDataset):
         if self.test_mode:
             data_info['eval_ann_info'] = ann_info
 
-        print("DEBUG KEYS:", data_info.keys())
-        print("LIDAR USED:", data_info['lidar_points']['lidar_path'])
         return self.pipeline(data_info)

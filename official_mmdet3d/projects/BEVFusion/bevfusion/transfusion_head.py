@@ -320,25 +320,6 @@ class TransFusionHead(nn.Module):
                     [ret_dict[key] for ret_dict in ret_dicts], dim=-1)
             else:
                 new_res[key] = ret_dicts[0][key]
-
-        print(self.auxiliary)
-        print(self.num_decoder_layers)
-        print(len(ret_dicts))
-
-        print("=== forward_single ===")
-        print(type(new_res))
-        print(new_res.keys())
-        print("=== END forward_single ===")
-        
-        print(type(ret_dicts))
-
-        if isinstance(ret_dicts, list):
-            print("len =", len(ret_dicts))
-            for i, r in enumerate(ret_dicts):
-                print(i, type(r))
-
-        elif isinstance(ret_dicts, dict):
-            print("RETORNANDO APENAS UM DICT")
         
         return [new_res]
 
@@ -352,34 +333,12 @@ class TransFusionHead(nn.Module):
             tuple(list[dict]): Output results. first index by level, second
             index by layer
         """
-        print("=== forward ===")
-        print(type(feats))
-
-        if isinstance(feats, tuple):
-            print("tuple len", len(feats))
-            for i, f in enumerate(feats):
-                print(i, type(f), f.shape)
-
-        elif isinstance(feats, list):
-            print("list len", len(feats))
-            for i, f in enumerate(feats):
-                print(i, type(f), f.shape)
 
         if isinstance(feats, torch.Tensor):
             feats = [feats]
         res = multi_apply(self.forward_single, feats, [metas])
-        print(type(res))
-        print(type(res[0]))
-        print(len(res[0]))
-        print(type(res[0][0]))
         assert len(res) == 1, 'only support one level features.'
-
-        print("=== forward return ===")
-        print(type(res))
-        print(len(res))
-
-        for i, r in enumerate(res):
-            print(i, type(r))
+        
         return res
 
     def predict(self, batch_feats, batch_input_metas):
@@ -801,13 +760,7 @@ class TransFusionHead(nn.Module):
             batch_input_metas.append(data_sample.metainfo)
             batch_gt_instances_3d.append(data_sample.gt_instances_3d)
         preds_dicts = self(batch_feats, batch_input_metas)
-        print(type(preds_dicts))
-        print(len(preds_dicts))
-
-        for i, p in enumerate(preds_dicts):
-            print("layer", i, type(p))
-            if isinstance(p, dict):
-                print("keys:", p.keys())
+        
         loss = self.loss_by_feat(preds_dicts, batch_gt_instances_3d)
 
         return loss
@@ -815,11 +768,6 @@ class TransFusionHead(nn.Module):
     def loss_by_feat(self, preds_dicts: Tuple[List[dict]],
                      batch_gt_instances_3d: List[InstanceData], *args,
                      **kwargs):
-
-        print("ANTES DO GET_TARGETS")
-        print(type(preds_dicts))
-        print(type(preds_dicts[0]))
-        print(id(preds_dicts[0]))
 
         (
             labels,
@@ -834,27 +782,6 @@ class TransFusionHead(nn.Module):
 
         preds_dict = preds_dicts[0][0]   # <-- MOVIDO PRA CÁ, antes dos prints de debug
 
-        print("========== loss_by_feat ==========")
-        print(type(preds_dicts))
-        print("len =", len(preds_dicts))
-
-        for i, x in enumerate(preds_dicts):
-            print("preds_dicts[{}]".format(i), type(x))
-
-            if isinstance(x, list):
-                print("   len =", len(x))
-                for j, y in enumerate(x):
-                    print("      [{}]".format(j), type(y))
-
-        for i, x in enumerate(preds_dicts):
-            print(i, type(x))
-            if isinstance(x, list):
-                print(" list len =", len(x))
-                print(" first =", type(x[0]))
-
-        print("preds_dict len:", len(preds_dict))   # agora funciona, preds_dict já existe
-        print(preds_dict)
-        
         if hasattr(self, 'on_the_image_mask'):
             label_weights = label_weights * self.on_the_image_mask
             bbox_weights = bbox_weights * self.on_the_image_mask[:, :, None]

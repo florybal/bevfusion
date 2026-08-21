@@ -102,13 +102,13 @@ class PlastipakMetric(KittiMetric):
     #
     # You can later make this class-dependent.
     DEFAULT_IOU_THRESHOLDS = {
-        'obstrucao': 0.10,
-        'empilhadeira': 0.10,
-        'carga': 0.10,
-        'maquina': 0.10,
-        'humano': 0.10,
+        'obstrucao': 0.01,
+        'empilhadeira': 0.01,
+        'carga': 0.01,
+        'maquina': 0.01,
+        'humano': 0.01,
         'navegavel': 0.30,
-        'estrutura': 0.30,
+        'estrutura': 0.50,
         'portapalete': 0.10,
     }
 
@@ -486,27 +486,9 @@ class PlastipakMetric(KittiMetric):
                 )
 
             self.results.append(result)
-            
-        print("\n================ BOX DEBUG ================")
-
+    
         gt_boxes = result['eval_ann_info']['gt_bboxes_3d']
         pred_boxes = result['pred_instances_3d']['bboxes_3d']
-
-        print("GT:")
-        print(gt_boxes)
-
-        print("PRED:")
-        print(pred_boxes)
-
-        if hasattr(gt_boxes, 'tensor'):
-            print("GT tensor:")
-            print(gt_boxes.tensor[:5])
-
-        if hasattr(pred_boxes, 'tensor'):
-            print("PRED tensor:")
-            print(pred_boxes.tensor[:5])
-
-        print("===========================================\n")
 
     # ==============================================================
     # BOX UTILITIES
@@ -1266,37 +1248,15 @@ class PlastipakMetric(KittiMetric):
 
         aps = []
 
-        print_log(
-            '',
-            logger=logger)
+        print_log('',logger=logger)
+        print_log('======================================',logger=logger)
+        print_log('Plastipak 3D Detection Evaluation',logger=logger)
+        print_log('======================================',logger=logger)
+        print_log(f'IoU threshold: {self.iou_thr:.2f}',logger=logger)
+        print_log(f'Score threshold: {self.score_thr:.2f}',logger=logger)
+        print_log('',logger=logger)
 
-        print_log(
-            '======================================',
-            logger=logger)
-
-        print_log(
-            'Plastipak 3D Detection Evaluation',
-            logger=logger)
-
-        print_log(
-            '======================================',
-            logger=logger)
-
-        print_log(
-            f'IoU threshold: {self.iou_thr:.2f}',
-            logger=logger)
-
-        print_log(
-            f'Score threshold: {self.score_thr:.2f}',
-            logger=logger)
-
-        print_log(
-            '',
-            logger=logger)
-
-        for class_id, class_name in enumerate(
-            self.PLASTIPAK_CLASSES
-        ):
+        for class_id, class_name in enumerate(self.PLASTIPAK_CLASSES):
 
             result = self._evaluate_class(
                 results,
@@ -1305,58 +1265,20 @@ class PlastipakMetric(KittiMetric):
             )
 
             ap = result['ap']
-
             aps.append(ap)
 
-            prefix = (
-                f'{class_name}'
-            )
+            prefix = (f'{class_name}')
 
-            metric_dict[
-                f'{prefix}/AP'
-            ] = float(ap)
+            metric_dict[f'{prefix}/AP'] = float(ap)
+            metric_dict[f'{prefix}/precision'] = float(result['precision'])
+            metric_dict[f'{prefix}/recall'] = float(result['recall'])
+            metric_dict[f'{prefix}/TP'] = float(result['tp'])
+            metric_dict[f'{prefix}/FP'] = float(result['fp'])
+            metric_dict[f'{prefix}/FN'] = float(result['fn'])
+            metric_dict[f'{prefix}/GT'] = float(result['num_gt'])
+            metric_dict[f'{prefix}/predictions'] = float(result['num_predictions'])
 
-            metric_dict[
-                f'{prefix}/precision'
-            ] = float(
-                result['precision'])
-
-            metric_dict[
-                f'{prefix}/recall'
-            ] = float(
-                result['recall'])
-
-            metric_dict[
-                f'{prefix}/TP'
-            ] = float(
-                result['tp'])
-
-            metric_dict[
-                f'{prefix}/FP'
-            ] = float(
-                result['fp'])
-
-            metric_dict[
-                f'{prefix}/FN'
-            ] = float(
-                result['fn'])
-
-            metric_dict[
-                f'{prefix}/GT'
-            ] = float(
-                result['num_gt'])
-
-            metric_dict[
-                f'{prefix}/predictions'
-            ] = float(
-                result[
-                    'num_predictions'])
-
-            metric_dict[
-                f'{prefix}/matched_IoU'
-            ] = float(
-                result[
-                    'matched_iou'])
+            metric_dict[f'{prefix}/matched_IoU'] = float(result['matched_iou'])
 
             print_log(
                 (
@@ -1390,17 +1312,9 @@ class PlastipakMetric(KittiMetric):
 
         metric_dict['mAP'] = mAP
 
-        print_log(
-            '',
-            logger=logger)
-
-        print_log(
-            f'mAP = {mAP:.4f}',
-            logger=logger)
-
-        print_log(
-            '======================================',
-            logger=logger)
+        print_log('',logger=logger)
+        print_log(f'mAP = {mAP:.4f}',logger=logger)
+        print_log('======================================',logger=logger)
 
         return metric_dict
 
@@ -1474,9 +1388,7 @@ class PlastipakMetric(KittiMetric):
 
             if 'instances' in item:
 
-                self._ensure_image_hw(
-                    item
-                )
+                self._ensure_image_hw(item)
 
                 continue
 
@@ -1484,10 +1396,7 @@ class PlastipakMetric(KittiMetric):
             # Legacy annos
             # ------------------------------------------------------
 
-            annos = item.get(
-                'annos',
-                {}
-            )
+            annos = item.get('annos',{})
 
             boxes_3d = np.asarray(
                 annos.get(
@@ -1543,12 +1452,9 @@ class PlastipakMetric(KittiMetric):
                     )
                 )
 
-            item['instances'] = \
-                instances
+            item['instances'] = instances
 
-            self._ensure_image_hw(
-                item
-            )
+            self._ensure_image_hw(item)
 
         # ----------------------------------------------------------
         # IMPORTANT:
@@ -1564,9 +1470,6 @@ class PlastipakMetric(KittiMetric):
         # which only knows KITTI classes.
         # ----------------------------------------------------------
 
-        metric_dict = self.plastipak_evaluate(
-            results,
-            logger=None
-        )
+        metric_dict = self.plastipak_evaluate(results,logger=None)
 
         return metric_dict
